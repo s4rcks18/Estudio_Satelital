@@ -13,6 +13,10 @@ Por otro lado, esta API complementa el flujo recibiendo las coordenadas extremas
 ### Lógica Técnica y Funcionamiento del Algoritmo
 El núcleo del script opera mediante un ciclo secuencial de validación espacial: primero, el algoritmo intercepta las figuras creadas en el mapa mediante `Map.draw_features` y evalúa su tipo geométrico (`Point`, `Polygon`, etc.). Si detecta un punto, aplica una operación de búfer simétrico (`g.buffer()`) expandiéndolo en metros según el parámetro ingresado, mientras que si es un polígono o rectángulo, respeta sus vértices originales sin alteraciones. Posteriormente, se realiza un recorte ráster sobre la imagen base de Sentinel-2 utilizando las geometrías procesadas, se evalúa la fórmula matemática del índice espectral seleccionado (como NDVI o MNDWI), se renderiza la capa visualmente con su paleta de colores y leyenda, y finalmente se extraen los datos tabulares mediante un muestreo espacial a escala nativa de 10 metros, generando un archivo CSV estructurado por zonas con las etiquetas de origen correspondientes.
 
+
+### Librerias que se requieren instalar
+pip install earthengine-api geemap ipywidgets pandas requests
+
 tambien mencionar que encuentro ciertos detalles con ciertas herramientas del mismo GEE , y que en la extraccion de la infomacion por pixel teninendo ese limitante tendria que indagar y apoyarme más para permitir más pixeles ya que claramente son muchos pixeles por 1 y quisiera que pudiera con mas de 3 zonas.
 
 tengo entendido que esto genera un diagrama en git entonces lo mandare de esta manera para saber si es asi, si no para desarrollarlo en dia o draw.io 
