@@ -1,35 +1,63 @@
 # Estudio_Satelital
-Documentos y datos sobre imagenes satelitales previos para poder realizar predicciones con IA.
+Documentos y datos sobre imágenes satelitales previos para poder realizar predicciones con IA.
 
 ### Introducción a la Herramienta
-Esta herramienta la armé en Python usando `geemap` y Google Earth Engine para facilitar el análisis de imágenes satelitales de Sentinel-2 de forma interactiva desde un Jupyter Notebook, permitiendo dibujar zonas en el mapa y procesarlas al instante con un panel de control flotante muy práctico.
+Esta herramienta la armé en Python usando `geemap` e `ipywidgets` para facilitar el análisis interactivo de imágenes satelitales desde un Jupyter Notebook. Permite delimitar zonas de estudio mediante múltiples métodos de selección, procesando los índices espectrales al instante con un panel de control flotante.
 
-### Especificación Técnica de Google Earth Engine (GEE) API
-Por la parte técnica, la API de Google Earth Engine se encarga de manejar la colección multiespectral de Sentinel-2 (`COPERNICUS/S2_SR_HARMONIZED`) aplicando filtros temporales y de nubosidad, utilizando específicamente las bandas B2 (Azul), B3 (Verde), B4 (Rojo), B8 (Infrarrojo Cercano) y B11 (SWIR). Lo que obtenemos son rásters procesados con fórmulas de índices y matrices detalladas con coordenadas geográficas de latitud/longitud y los valores numéricos exactos de cada píxel, controlando un límite estricto de 4,999 elementos por lote (`numPixels`) para evitar bloqueos por parte de los servidores.
+---
 
-### Integración de la Overpass API
-Por otro lado, esta API complementa el flujo recibiendo las coordenadas extremas o `bounding boxes` calculadas a partir de las geometrías dibujadas en el mapa, devolviendo elementos vectoriales del área de interés de manera rápida y configurada con un tiempo de espera estricto (`timeout`) para no congelar la interfaz gráfica de los widgets.
+### Fuentes y Métodos de Zonas de Estudio
+Para delimitar y procesar las áreas geográficas, el sistema soporta tres fuentes principales de geometrías:
+1. **Dibujos manuales e interactivos:** Trazado de puntos (con búfer configurable en metros para generar áreas circulares o cuadradas), polígonos, rectángulos o líneas directamente sobre el mapa interactivo mediante `ipyleaflet`.
+2. **Límites Administrativos Oficiales (FAO GAUL 2015):** Capas vectoriales de Google Earth Engine que permiten seleccionar países enteros (Nivel 0), estados (Nivel 1) o municipios individuales/masivos (Nivel 2).
+3. **Infraestructura y Elementos de OpenStreetMap (OSM / Overpass API):** Extracción automatizada de elementos físicos del mundo real (edificios, calles, cuerpos de agua, zonas naturales) en áreas de hasta 25 km², permitiendo hacer clic en cualquier estructura para convertirla en zona activa de análisis.
 
-### Lógica Técnica y Funcionamiento del Algoritmo
-El núcleo del script opera mediante un ciclo secuencial de validación espacial: primero, el algoritmo intercepta las figuras creadas en el mapa mediante `Map.draw_features` y evalúa su tipo geométrico (`Point`, `Polygon`, etc.). Si detecta un punto, aplica una operación de búfer simétrico (`g.buffer()`) expandiéndolo en metros según el parámetro ingresado, mientras que si es un polígono o rectángulo, respeta sus vértices originales sin alteraciones. Posteriormente, se realiza un recorte ráster sobre la imagen base de Sentinel-2 utilizando las geometrías procesadas, se evalúa la fórmula matemática del índice espectral seleccionado (como NDVI o MNDWI), se renderiza la capa visualmente con su paleta de colores y leyenda, y finalmente se extraen los datos tabulares mediante un muestreo espacial a escala nativa de 10 metros, generando un archivo CSV estructurado por zonas con las etiquetas de origen correspondientes.
+---
 
+### Especificación Técnica de Google Earth Engine (GEE) API y Datos Utilizados
+La herramienta interactúa directamente con los servidores en la nube de GEE utilizando los siguientes datasets y tipos de datos:
+* **Colección base satelital:** `COPERNICUS/S2_SR_HARMONIZED` (`ee.ImageCollection`). Contiene reflectancia de superficie de Sentinel-2 Level-2A corregida atmosféricamente. Los valores de reflectancia se escalan dividiéndolos entre `10000` (`ee.Image.divide(10000)`).
+* **Filtros aplicados:** Rango temporal (`ee.Filter.date` con cadenas de texto `YYYY-MM-DD`) y filtro estricto de nubosidad (`ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 15)`).
+* **Topografía:** `USGS/SRTMGL1_003` (`ee.Image`). Modelo digital de elevación (DEM) de 30 metros de resolución espacial.
+* **Bandas espectrales y tipos procesados:**
+  * `B2` (Azul, float), `B3` (Verde, float), `B4` (Rojo, float), `B8` (Infrarcojo Cercano - NIR, float), `B11` (Infrarcojo de Ondas Cortas - SWIR, float).
+* **Índices y variables calculadas:** NDVI, NDWI, MNDWI, EVI, NDSI, BSI, SAVI, NDMI, ELEVACION y PENDIENTE mediante expresiones matemáticas normalizadas de tipo `ee.Image`.
 
-### Librerias que se requieren instalar
-pip install earthengine-api geemap ipywidgets pandas requests
+---
 
-tambien mencionar que encuentro ciertos detalles con ciertas herramientas del mismo GEE , y que en la extraccion de la infomacion por pixel teninendo ese limitante tendria que indagar y apoyarme más para permitir más pixeles ya que claramente son muchos pixeles por 1 y quisiera que pudiera con mas de 3 zonas.
+### Integración de la Overpass API (OpenStreetMap / OSMnx)
+* **Función:** Se conecta a los servidores espejo de Overpass API para extraer elementos vectoriales reales del mundo físico a partir de un polígono de interés (`shapely.geometry.Polygon`).
+* **Datos y Tipos extraídos:** Retorna un `geopandas.GeoDataFrame` con geometrías vectoriales (`Point`, `LineString`, `Polygon`) y metadatos en formato de diccionario de etiquetas (`dict`).
+* **Categorización y Filtrado:** Traduce y clasifica los atributos (`amenity`, `highway`, `water`, `building`, etc.) en categorías normalizadas (`edificio`, `calle`, `agua`, `servicio`, `natural`, `estructura`).
+* **Estabilidad:** Configurada con `timeout = 300s` y rotación automática de espejos (`overpass-api.de`, servidores de respaldo) para soportar áreas de hasta **25 km²** y renderizar hasta 15,000 estructuras en capas interactivas `ipyleaflet.GeoJSON`.
 
-tengo entendido que esto genera un diagrama en git entonces lo mandare de esta manera para saber si es asi, si no para desarrollarlo en dia o draw.io 
-```mermaid
-flowchart TD
-    User([Usuario / Interfaz]) -->|1. Coordenadas, Tipo de Geometría y Radio (m)| Script[Script Principal geemap / ipywidgets]
-    Script -->|2. Evaluación lógica de vértices y búferes| Memory[(Historial de Zonas en Memoria)]
-    Memory -->|3. Geometrías procesadas y Bandas B2, B3, B4, B8, B11| GEE[(Google Earth Engine API)]
-    GEE -->|4. Ráster recortado, Matriz Lat/Lon y Valores de Píxel| Script
-    Script -->|5. Capa visual, paleta de colores y leyenda| User
-    User -->|6. Solicitud de exportación| Script
-    Script -->|7. Consulta segura por lotes numPixels=4999| GEE
-    GEE -->|8. Dataset de píxeles filtrados| Script
-    Script -->|9. Archivo CSV con Pixel_ID, Origen_Figura y Coordenadas| Storage[(Disco Local: CSV)]
+---
 
+### Valores a Utilizar en el Mapa e Interfaz Visual
+Los datos ráster procesados se renderizan dinámicamente en el mapa mediante diccionarios de visualización (`vis`) que configuran los umbrales numéricos y las paletas de colores hexadecimales:
+* **Índices Espectrales (ej. NDVI, MNDWI):** Valores continuos de tipo float que oscilan típicamente entre `-1.0` y `1.0`. Se representan con paletas de degradado continuo (ej. tonos marrones a verdes para vegetación, o rojos a azules para agua).
+* **Elevación (SRTM):** Valores enteros/float en metros (`0` a `3500+` m s.n.m.), representados con rampas altitudinales.
+* **Pendiente:** Valores en grados (`0` a `45+`°).
+* **Elementos Vectoriales (OSM):** Estilos aplicados mediante atributos visuales de GeoJSON (`color`, `fillColor`, `weight`, `fillOpacity`) optimizados por categoría.
 
+---
+
+### Características del Mapeo y Datos Contenidos en los Archivos CSV
+* **Exportación a Google Drive:** Envía tareas de procesamiento por lotes en segundo plano generando archivos **CSV limpios**.
+* **Estructura y Tipos de Datos en el CSV:**
+  * **Columnas de Control (Metadatos de la Zona):** `id_zona` (int, identificador único de la figura), `escala_m` (int, resolución espacial en metros, ej. 10, 20, 30), `error_posicion_max_m` (float, semidiagonal de la celda).
+  * **Variables Espectrales / Topográficas:** Valores numéricos (float) correspondientes a las bandas solicitadas (`NDVI`, `NDWI`, etc.).
+  * **Coordenadas (Modo Píxeles):** `longitude` (float) y `latitude` (float) de cada píxel muestreado a escala nativa.
+  * **Modo Estadísticas (Alternativo):** Agrega sufijos métricos por zona (`_mean`, `_stdDev`, `_min`, `_max`, `_count`, `_error_est`).
+
+---
+
+### Limitaciones Actuales y Retos Técnicos con GEE
+* **Límite de píxeles por exportación/muestreo:** Al extraer información masiva por píxel en áreas extensas o al intentar procesar de forma simultánea múltiples zonas complejas, se alcanzan los umbrales de memoria y restricciones de nodos de procesamiento de Earth Engine (`maxPixels` / límites de la API síncrona).
+* **Próximos pasos:** Indagar en métodos avanzados de procesamiento por lotes en la nube (`ImageCollection.map()` o exportaciones particionadas a Google Cloud Storage / BigQuery) para escalar la extracción más allá de los límites locales.
+
+---
+
+### Librerías Requeridas
+```bash
+pip install earthengine-api geemap ipywidgets pandas requests osmnx shapely matplotlib
